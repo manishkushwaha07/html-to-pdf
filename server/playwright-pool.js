@@ -1,19 +1,29 @@
+"use strict";
+
 const os = require("os");
 const fs = require("fs/promises");
 const multer = require("multer");
 const express = require("express");
 const logger = require("./logger");
+const pidusage = require("pidusage");
 const bodyParser = require("body-parser");
 const compression = require("compression");
 const { chromium } = require("playwright");
 const genericPool = require("generic-pool");
+const sanitizeHtml = require("sanitize-html");
 const PQueue = require("p-queue").default;
 
 // ------------------- CONFIG ------------------- //
 const PORT = process.env.PORT || 5000;
 const CORES = os.availableParallelism();
-const PAGE_POOL_SIZE = Math.ceil(CORES * 1.5);
-const CONTEXT_POOL_SIZE = Math.floor(CORES / 2);
+
+const CONTEXT_POOL_SIZE = Math.max(2, Math.floor(CORES / 2));
+const PAGE_POOL_SIZE = Math.max(2, CORES);
+
+// const MAX_CONCURRENCY = Math.floor(CONTEXT_POOL_SIZE * PAGE_POOL_SIZE * 0.8);
+const MAX_CONCURRENCY = Math.min(CORES * 2, CONTEXT_POOL_SIZE * 2);
+const MAX_QUEUE_SIZE = 500;
+
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
 
 // ------------------- BROWSER ------------------- //
@@ -34,12 +44,9 @@ async function startBrowser() {
     ],
   });
   browser.on("disconnected", async () => {
-    if(isShuttingDown) {
-      logger.info("Browser disconnected during shutdown");
-      return;
-    }
+    if(isShuttingDown) { return; }
     logger.error("Browser crashed. Restarting...");
-    await startServer();
+    browser = await startBrowser();
   });
   return browser;
 }
@@ -48,7 +55,7 @@ async function startBrowser() {
 const trackedContexts = new Set();
 
 const contextPoolOpts = {
-  min: 1,
+  min: 2,
   max: CONTEXT_POOL_SIZE,
   maxWaitingClients: 10,
   idleTimeoutMillis: 30000,
@@ -56,6 +63,7 @@ const contextPoolOpts = {
   evictionRunIntervalMillis: 10000,
   autostart: true,
 }
+
 const contextPool = genericPool.createPool(
   {
     create: async () => {
@@ -76,7 +84,7 @@ const contextPool = genericPool.createPool(
 
 // ------------------- PAGE POOL ------------------- //
 const pagePoolOpts = {
-  min: 1,
+  min: 5,
   max: PAGE_POOL_SIZE,
   maxWaitingClients: 10,
   idleTimeoutMillis: 30000,
@@ -89,7 +97,9 @@ const createPagePool = (context) => genericPool.createPool(
   {
     create: async () => {
       const page = await context.newPage();
+      await page.goto('about:blank');
       await configurePage(page);
+      await page.waitForLoadState('domcontentloaded', {timeout: 1000} );
       return page;
     },
     destroy: async (page) => {
@@ -115,24 +125,26 @@ async function configurePage(page) {
   page._configured = true;
 }
 
-// -------------------DEEP WARM UP POOLS ------------------- //
+// ------------------- QUEUE ------------------- //
+const queue = new PQueue({ concurrency: MAX_CONCURRENCY, timeout: 10000, throwOnTimeout: true });
+queue.on('active', () => {
+  // console.log(`PDF Queue active: ${queue.size} waiting, ${queue.pending} running`);
+});
 
-async function deepWarmUpPools(contextMin, pageMin) {
-  const contexts = await Promise.all(
-    Array.from({ length: contextMin }, () => contextPool.acquire() )
-  );
-  
-  await Promise.all(contexts.map(async (context) => {
-    const pages = await Promise.all(Array.from({ length: pageMin }, async() => {
-      const page = await context.pagePool.acquire();
-      await page.setContent("", { waitUntil: "commit"}); 
-      return page;
-    }));
+async function updateQueueConcurrency() {
+  try{
+    const { cpu } = await pidusage(process.pid);
+    const freeMemRatio = os.freemem() / os.totalmem();
+    let next = Math.floor(MAX_CONCURRENCY * (100 - cpu) / 100);
 
-    await Promise.all(pages.map(page => context.pagePool.release(page)));
-  }));
+    if (freeMemRatio < 0.2) next -= 2;
+    if (freeMemRatio > 0.4) next += 1;
+    queue.concurrency = Math.max(2, Math.min(MAX_CONCURRENCY, next));
 
-  await Promise.all(contexts.map(context => contextPool.release(context)));
+    logger.info(`[Queue] CPU: ${cpu.toFixed(2)}%, concurrency set to ${queue.concurrency}`);
+  } catch(error){
+    logger.log(`Queue concurrency adjust error`, error);
+  }
 }
 
 // ------------------- RENDER PAGE ------------------- //
@@ -140,12 +152,7 @@ const pdfOpts = {
   // path: 'invoice.pdf',	 
   scale: 1,
   format: "A4",
-  margin: {
-    top: "0",
-    bottom: "0",
-    left: "0",
-    right: "0"
-  },
+  margin: { top: "0", bottom: "0", left: "0", right: "0"},
   landscape: false,
   printBackground: true,
   preferCSSPageSize: false,
@@ -167,59 +174,72 @@ async function render(html, type = "pdf") {
         return await page.pdf(pdfOpts);
       } 
       return await page.screenshot({ type: 'png'});
+
+    }catch (error) {
+      await context.pagePool.destroy(page);
+      throw error;
     }finally {
-      try{
-        // await page.evaluate(() => document.body.innerHTML = "");
-        // await page.goto("about:blank");
-        await context.pagePool.release(page);
-      }catch (error) {
-        await context.pagePool.destroy(page);
+      // await page.evaluate(() => document.body.innerHTML = "");
+      if(!page.isClosed()){
+        await context.pagePool.release(page).catch(() => {});
       }
     }
+  }catch (error) {
+    await contextPool.destroy(context);
+    throw error;
   }finally {
-    try{
-      await contextPool.release(context);
-    }catch (error) {
-      await contextPool.destroy(context);
-    }
+    await contextPool.release(context).catch(() => {});
   }
 }
 
-// ------------------- QUEUE ------------------- //
-const MAX_CONCURRENCY = Math.floor(CONTEXT_POOL_SIZE * PAGE_POOL_SIZE * 0.8);
-const queue = new PQueue({ 
-  concurrency: MAX_CONCURRENCY, 
-  timeout: 10000,
-  throwOnTimeout: true 
-});
+// -------------------DEEP WARM UP POOLS ------------------- //
+async function contextPoolWarmUp() {
+  // Warm context pool
+  contextPool.start();
+  // await contextPool.ready().then(() => logger.info(`context pool ready`));
 
-queue.on('active', () => {
-  // console.log(`PDF Queue active: ${queue.size} waiting, ${queue.pending} running`);
-});
+  // Acquire all pre-created contexts
+  const contexts = await Promise.all(
+    Array.from({ length: contextPool.min }, () => contextPool.acquire() )
+  );
+  logger.info(`contextx size ${contexts.length}`)
+  // Warm each page pool
+  await Promise.all(contexts.map(async (context, index) => {
+    await pagePoolWarmUp(context.pagePool);
+    logger.info(`context ${index}: page pool ready`);
+  }));
+  
+  // Release contexts back
+  await Promise.all(contexts.map(context => contextPool.release(context)));
 
-function updateQueueConcurrency() {
-  pidusage(process.pid, (err, stats) => {
-    if (err) return console.error(err);
-
-    const cpu = stats.cpu; // CPU usage percentage
-
-    // Scale concurrency: lower CPU → higher concurrency, higher CPU → lower concurrency
-    let newConcurrency = Math.floor(MAX_CONCURRENCY * (100 - cpu) / 100);
-
-    // Clamp to min/max
-    newConcurrency = Math.max(10, Math.min(MAX_CONCURRENCY, newConcurrency));
-
-    queue.concurrency = newConcurrency;
-    logger.info(`[Queue] CPU: ${cpu.toFixed(1)}%, concurrency set to ${newConcurrency}`);
-  });
+  logger.info('All pools (context and page) warmed up');
 }
 
-function updateQueue(){
-  const FREE_MEM = os.freemem() / os.totalmem();
-  if(FREE_MEM < 0.2){
-    queue.concurrency = MAX_CONCURRENCY -10;
-  }
+async function pagePoolWarmUp(pagePool) {
+  pagePool.start();
+  // await pagePool.ready().then(() => logger.info(`page pool ready`));
+
+  const pages = await Promise.all( Array.from({ length: pagePool.min }, async() => {
+    const page = await context.pagePool.acquire();
+    await page.setContent("", { waitUntil: "commit"}); 
+    return page;
+  }));
+
+  await Promise.all(pages.map(page => context.pagePool.release(page)));
 }
+
+// ------------------- Express ------------------- //
+const app = express();
+const upload = multer({ dest: "uploads/" });
+
+// ------------------- KEEP-ALIVE / TIMEOUTS ------------------- //
+app.set("keepAliveTimeout", 65000);  // Keep TCP connections alive for 65s
+app.set("headersTimeout", 66000);    // Max time to wait for headers from client
+
+app.use(compression());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.text({ limit: "10mb", type: ["text/*", "application/html"] }));
+app.use(bodyParser.text({ limit: "10mb", type: ["application/xml", "text/xml"] }));
 
 // ------------------- REQUEST LOGGER (Lightweight) ------------------- //
 const reqInfo = (req, res, next) => {
@@ -233,36 +253,31 @@ const reqInfo = (req, res, next) => {
   next();
 };
 
-// ------------------- Express ------------------- //
-const app = express();
-
-// ------------------- KEEP-ALIVE / TIMEOUTS ------------------- //
-app.set("keepAliveTimeout", 65000);  // Keep TCP connections alive for 65s
-app.set("headersTimeout", 66000);    // Max time to wait for headers from client
-
-app.use(compression());
-app.use(express.json({ limit: "10mb" }));
-app.use(express.text({ limit: "10mb", type: ["text/*", "application/html"] }));
-app.use(bodyParser.text({ limit: "10mb", type: ["application/xml", "text/xml"] }));
 app.use(reqInfo);
-const upload = multer({ dest: "uploads/" });
 
 // ------------------- Routes ------------------- //
 app.get("/health", (req, res) => {
-  res.send({ poolSize: contextPool.size, available: contextPool.available, pending: contextPool.pending });
+  res.json({
+    queue:  { waiting: queue.size, running: queue.pending },
+    pool:   { contexts: contextPool.size, available: contextPool.available, pending: contextPool.pending }
+  });
 });
 
 app.post("/playwright", async (req, res) => {
   try{
-    const html = req.body;
+    if(queue.size > MAX_QUEUE_SIZE){
+      return res.status(503).send("server busy");
+    }
+
+    let html = req.body;
     const type = req.query.type || "pdf";
 
     if (!html) return res.status(400).send("HTML required");
     if (html.length > 5_000_000) return res.status(413).send("HTML too large");
     if (html.includes("<script")) return res.status(400).send("Scripts not allowed");
-    
-    const result = await queue.add(() => render(html, type));
 
+    html = cleanHTML(html);
+    const result = await queue.add(() => render(html, type));
     if (!result) return res.status(500).send("No result");
 
     res.set( "Content-Type", type === "image" ? "image/png" : "application/pdf");
@@ -281,17 +296,20 @@ app.post("/playwright-upload", upload.single("html"), async (req, res) => {
   if (!req.file) return res.status(400).send("No file uploaded");
 
   try {
-    const html = await fs.readFile(req.file.path, "utf8");
+    if(queue.size > MAX_QUEUE_SIZE){
+      return res.status(503).send("server busy");
+    }
+
+    let html = await fs.readFile(req.file.path, "utf8");
 
     if (!html) return res.status(400).send("HTML required");
     if (html.length > 5_000_000) return res.status(413).send("HTML too large");
     if (html.includes("<script")) return res.status(400).send("Scripts not allowed");
     
+    html = cleanHTML(html);
     const result = await queue.add(() => render(html));
-
     if (!result) return res.status(500).send("No result");
-    await fs.unlink(req.file.path);
-
+    
     res.set({ 
       "Content-Type": "application/pdf", 
       "Content-Length": result.length, 
@@ -301,64 +319,63 @@ app.post("/playwright-upload", upload.single("html"), async (req, res) => {
   } catch (err) {
     logger.error(err);
     res.status(500).send("PDF generation failed");
+  } finally {
+    if(req.file) {
+      await fs.unlink(req.file.path).catch(() => {});
+    }
   }
 });
 
-// ------------------- Pool & CPU Status ------------------- //
-async function logPoolAndCPUStatus() {
-  const cpuUsage = getCPUUsage();
-  let message1 = `CPU Usage: ${cpuUsage.toFixed(3)}% | `;
-  let message2 = `Queue -> Total Jobs: ${queue.size} | Pending Jobs: ${queue.pending} | Running Jobs ${queue.runningTasks.length} |`;
-  let message3 = `ContextPool -> Total: ${contextPool.size} | Active: ${contextPool.borrowed} | Pending: ${contextPool.pending} | Available: ${contextPool.available} |`;
-  
-  let message4 = ``;
-  Array.from(trackedContexts).forEach((context, index) => {
-    if (context.pagePool) {
-      const pagePool = context.pagePool;
-      message4 += `Context #${index + 1} PagePool -> Total: ${pagePool.size} | Active: ${pagePool.borrowed} | Pending: ${pagePool.pending} | Available: ${pagePool.available} \n`;
-    }
+// ---------------- SANITIZE ---------------- //
+function cleanHTML(html) {
+  return html;
+  return sanitizeHtml(html, {
+    allowedTags: sanitizeHtml.defaults.allowedTags,
+    allowedAttributes: false
   });
-  
-  if (cpuUsage > 90){ 
-    logger.error(message1); 
-    logger.error(message2); 
-    logger.error(message3); 
-    logger.error(message4);
-  }else if (cpuUsage > 80){ 
-    logger.warn(message1); 
-    logger.warn(message2); 
-    logger.warn(message3); 
-    logger.warn(message4);
-  }else { 
-    logger.info(message1); 
-    logger.info(message2); 
-    logger.info(message3); 
-    logger.info(message4);
-  };
 }
 
-// ------------------- CPU Monitor ------------------- //
+// ---------------- MONITOR ---------------- //
+setInterval(() => {
+  updateQueueConcurrency();
+  const queueStats = { waiting: queue.size, running: queue.pending };
+
+  const contextStats = {
+    total: contextPool.size, available: contextPool.available, borrowed: contextPool.borrowed, pending: contextPool.pending
+  };
+
+  const pagePoolStats = [];
+  let index = 1;
+  for(const context of trackedContexts) {
+    const pool = context.pagePool;
+    if (!pool) continue;
+    pagePoolStats.push({
+      context: index++, total: pool.size, available: pool.available, borrowed: pool.borrowed, pending: pool.pending
+    });
+  }
+
+  logger.log({
+    cpu:  getCPUUsage().toFixed(2),
+    queue:  queueStats,
+    contextPool:  contextStats,
+    pagePools: pagePoolStats
+  });
+}, 5000);
+
 function getCPUUsage() {
   const cpus = os.cpus();
   const cpuUsage = cpus.reduce((acc, cpu) =>{
     const total = Object.values(cpu.times).reduce((a, b) => a + b, 0);
-    const idle = cpu.times.idle;
-    return acc + (1 - idle/total);
+    return acc + (1 - cpu.times.idle/total);
   }, 0) / cpus.length * 100;
   return cpuUsage;
 }
-
-// Update every 5 seconds
-setInterval(async () => {
-  // updateQueueConcurrency();
-  await logPoolAndCPUStatus();
-}, 5000);
 
 // ------------------- Start Server ------------------- //
 let server;
 async function startServer() {
   await startBrowser();
-  // await deepWarmUpPools(contextPoolOpts.min, pagePoolOpts.min);
+  // await contextPoolWarmUp();
   
   server = app.listen(PORT, () => {
     logger.success(`Server running on port ${PORT}, PID ${process.pid}`);
@@ -376,9 +393,7 @@ const stopServer = async () => {
   
   try {
     if (server) await new Promise(r => server.close(r));
-    if (browser && browser.isConnected()) {
-      await browser.close();
-    }
+    if (browser && browser.isConnected()) { await browser.close(); }
     logger.success("Server stopped gracefully");
     process.exit(0);
   } catch (err) {
