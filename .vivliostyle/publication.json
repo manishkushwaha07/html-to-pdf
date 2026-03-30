@@ -1,0 +1,19 @@
+{
+  "@context": [
+    "https://schema.org",
+    "https://www.w3.org/ns/pub-context"
+  ],
+  "type": "Book",
+  "conformsTo": "https://github.com/vivliostyle/vivliostyle-cli",
+  "name": "My Report",
+  "author": "Your Name",
+  "dateModified": "2026-03-17T05:48:35.625Z",
+  "readingOrder": [
+    {
+      "url": "bill.html",
+      "name": "WZ Electricity Bill"
+    }
+  ],
+  "resources": [],
+  "links": []
+}

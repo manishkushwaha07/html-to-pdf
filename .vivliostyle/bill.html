@@ -1,0 +1,1236 @@
+<html lang="en"><head></head><body>@import java.math.BigDecimal
+@import com.mppkvvcl.jteone.utility.GlobalUtil
+@import com.mppkvvcl.jteone.utility.JteUtil
+
+@param com.mppkvvcl.jteone.dtos.templates.BillTemplate billTemplate
+
+!{
+	static String formatNumber(Object value) {
+        return formatNumber(value, 2);
+    }
+
+    static String formatNumber(Object value, int decimals) {
+        Object val = (value == null || value.isBlank()) ? 0 : value;
+        double number = Double.parseDouble(val.toString());
+        return String.format("%."+decimals+"f", number);
+        return String.format("%.2f", v);
+    }
+
+    static String safeString(Object value) {
+        return safeString(value, "");
+    }
+
+    static String safeString(Object value, String defaultValue) {
+        return (value == null || value.isBlank()) ? defaultValue : value.toString();
+    }
+	
+	var todInfo = billTemplate.getTodInformation();
+    var readInfo = billTemplate.getReadInformation();
+    var billSummary = billTemplate.getBillSummary();
+    var billInfo = billTemplate.getBillInformation();
+	var adInfo = billTemplate.getAdvertisementInformation();
+	var companyInfo = billTemplate.getCompanyInformation();
+    var consumerInfo = billTemplate.getConsumerInformation();
+    var connectionInfo = billTemplate.getConnectionInformation();
+	var meterReplacementInfo = billTemplate.getMeterReplacementInformation();
+}
+
+
+
+	
+		<meta charset="UTF-8">
+		<title>WZ Electricity Bill</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<style>
+			
+			:root{
+				--soft:		#0f4f87;
+				--primary: 	#1f6fb2;
+				--secondary:#6c757d;
+				--success: 	#198754;
+				--danger: 	#dc3545;
+				--warning: 	#ffc107;
+				--info:		#cff4fc;
+				--light: 	#f8f9fa;
+				--white:	#ffffff;
+				--muted: 	#6c757d;
+				--dark: 	#212529;
+				--primary2: #cfe2ff;
+				--secondary2:#e2e3e5;
+				--success2:	#d1e7dd;
+				--danger2:	#f8d7da;
+				--warning2:	#fff3cd;
+				--info2: 	#f3f7fb;
+				--light2:	#f8f9fa;
+			}
+			body{
+				font-family: "DejaVu Sans", Arial, Helvetica, sans-serif;
+				color:#0f172a;
+				background:#ffffff;
+				-webkit-print-color-adjust: exact;
+				print-color-adjust: exact;
+			}
+			*{ 
+				box-sizing: border-box; 
+				margin: 0; 
+				padding: 0; 
+			}
+			@media print { 
+				.print-none { display: none !important; } 
+				.print-block { display: block !important; }
+			}
+			#pageHeader { position: running(pageHeader); }
+			#pageFooter { position: running(pageFooter); }
+			@page {
+				size: A4;
+				margin: 2mm;
+				@top-center { content: element(pageHeader); }
+				@bottom-center { content: element(pageFooter); }
+			}
+			.page-number:before { content: counter(page) }
+			.total-pages:before { content: counter(pages); }
+			.page-break-avoid{
+				page-break-inside:avoid; 
+				break-inside:avoid;
+			}
+			.page-break-always{
+				page-break-before:always; 
+				break-inside:always;
+			}
+			.page-break-auto{
+				page-break-inside: auto; 
+				break-inside: auto;
+			}
+			.container { 
+				width: 100%; 
+				max-width: 1200px;
+				margin: auto;
+				padding: 0 15px;
+			}
+			.container-fluid { width: 100%; padding: 0 15px; }
+			.img-fluid { max-width: 100%; height: auto; }
+			.bg-primary   { background: var(--primary); color: var(--white); }
+			.bg-secondary { background: var(--secondary); color: var(--white); }
+			.bg-success   { background: var(--success); color: var(--white); }
+			.bg-danger    { background: var(--danger); color: var(--white); }
+			.bg-warning   { background: var(--warning); color: var(--dark); }
+			.bg-info      { background: var(--info); color: var(--dark); }
+			.bg-light     { background: var(--light); color: var(--dark); }
+
+			.bg-primary2  { background: var(--primary2); color: var(--dark); }
+			.bg-secondary2{ background: var(--secondary2); color: var(--dark); }
+			.bg-success2  { background: var(--success2); color: var(--dark); }
+			.bg-danger2   { background: var(--danger2); color: var(--dark); }
+			.bg-warning2  { background: var(--warning2); color: var(--dark); }
+			.bg-info2     { background: var(--info2); color: var(--dark); }
+			.bg-light2 	  { background-color: var(--light2); color: var(--dark); }
+			.bg-dark      { background: var(--dark); color: var(--white); }
+			.bg-white 	  { background-color: var(--white); color: var(--dark) }
+			.text-primary   { color: var(--primary) !important; }
+			.text-secondary { color: var(--secondary) !important; }
+			.text-success   { color: var(--success) !important; }
+			.text-danger    { color: var(--danger) !important; }
+			.text-warning   { color: var(--warning) !important; }
+			.text-info      { color: var(--info)!important; }
+			.text-light     { color: var(--light) !important; }
+			.text-dark      { color: var(--dark) !important; }
+			.text-muted     { color: var(--muted) !important; }
+			.text-start   { text-align: left !important; }
+			.text-center  { text-align: center !important; }
+			.text-end     { text-align: right !important; }
+			.text-justify { text-align: justify !important; }
+			.text-wrap { white-space: normal !important; }
+			.text-nowrap { white-space: nowrap !important; }
+			.text-break { 
+				word-wrap: break-word !important; 
+				overflow-wrap: break-word !important; 
+			}
+			.word-break { word-break: break-all !important; }
+			.text-lowercase  { text-transform: lowercase; }
+			.text-uppercase  { text-transform: uppercase; }
+			.text-capitalize { text-transform: capitalize; }
+			.text-decoration-none { text-decoration: none; }
+			.text-decoration-underline { text-decoration: underline; }
+			.text-decoration-line-through { text-decoration: line-through; }
+			.fw-light   { font-weight: 300 !important; }
+			.fw-normal  { font-weight: 400 !important; }
+			.fw-medium  { font-weight: 500 !important; }
+			.fw-bold    { font-weight: 700 !important; }
+			.fw-bolder  { font-weight: 900 !important; }
+			.fst-italic { font-style: italic !important; }
+			.fst-normal { font-style: normal !important; }
+			.fs-1 { font-size: 2.5rem !important; }
+			.fs-2 { font-size: 2rem !important; }
+			.fs-3 { font-size: 1.75rem !important; }
+			.fs-4 { font-size: 1.5rem !important; }
+			.fs-5 { font-size: 1.25rem !important; }
+			.fs-6 { font-size: 1rem !important; }
+			.lh-1   { line-height: 1 !important; }
+			.lh-sm  { line-height: 1.25 !important; }
+			.lh-base{ line-height: 1.5 !important; }
+			.lh-lg  { line-height: 2 !important; }
+			.small { font-size: 0.75em !important; }
+			.d-none { display: none; }
+			.d-flex { display: flex; }
+			.d-inline-flex { display: inline-flex; }
+			.flex-row { flex-direction: row; }
+			.flex-column { flex-direction: column; }
+			.flex-wrap { flex-wrap: wrap; }
+			.flex-nowrap { flex-wrap: nowrap; }
+			.flex-fill { flex: 1 1 auto }
+			.flex-grow-1 { flex-grow: 1; }
+			.flex-grow-0 { flex-grow: 0; }
+			.flex-shrink-1 { flex-shrink: 1; }
+			.flex-shrink-0 { flex-shrink: 0; }
+			.flex-equal > * { flex: 1 1 0; min-width: 0; }
+			.justify-center { justify-content: center; }
+			.justify-start { justify-content: flex-start; }
+			.justify-end { justify-content: flex-end; }
+			.justify-between { justify-content: space-between; }
+			.justify-around { justify-content: space-around; }
+			.justify-evenly { justify-content: space-evenly; }
+			.align-start { align-items: flex-start; }
+			.align-center { align-items: center; }
+			.align-end { align-items: flex-end; }
+			.align-stretch { align-items: stretch; }
+			.align-baseline { align-items: baseline; }
+			.align-self-start { align-self: flex-start; }
+			.align-self-center { align-self: center; }
+			.align-self-end { align-self: flex-end; }
+			.m-0 { margin: 0 !important; }
+			.m-1 { margin: .25rem !important; }
+			.m-2 { margin: .5rem !important; }
+			.m-3 { margin: 1rem !important; }
+			.m-4 { margin: 1.5rem !important; }
+			.m-5 { margin: 3rem !important; }
+			.mx-0 { margin-left: 0 !important; margin-right: 0 !important; }
+			.mx-1 { margin-left: .25rem !important; margin-right: .25rem !important; }
+			.mx-2 { margin-left: .5rem !important; margin-right: .5rem !important; }
+			.mx-3 { margin-left: 1rem !important; margin-right: 1rem !important; }
+			.mx-4 { margin-left: 1.5rem !important; margin-right: 1.5rem !important; }
+			.mx-5 { margin-left: 3rem !important; margin-right: 3rem !important; }
+			.mx-auto { margin-left: auto !important; margin-right: auto !important; }
+			.my-0 { margin-top: 0 !important; margin-bottom: 0 !important; }
+			.my-1 { margin-top: .25rem !important; margin-bottom: .25rem !important; }
+			.my-2 { margin-top: .5rem!important; margin-bottom: .5rem !important; }
+			.my-3 { margin-top: 1rem!important; margin-bottom: 1rem !important; }
+			.my-4 { margin-top: 1.5rem!important; margin-bottom: 1.5rem !important; }
+			.my-5 { margin-top: 3rem!important; margin-bottom: 3rem !important; }
+			.my-auto { margin-top: auto!important; margin-bottom: auto !important; }
+			.p-0 { padding: 0 !important; }
+			.p-1 { padding: .25rem !important; }
+			.p-2 { padding: .5rem !important; }
+			.p-3 { padding: 1rem !important; }
+			.p-4 { padding: 1.5rem !important; }
+			.p-5 { padding: 3rem !important; }
+			.px-0 { padding-left: 0 !important; padding-right: 0 !important; }
+			.px-1 { padding-left: .25rem !important; padding-right: .25rem !important; }
+			.px-2 { padding-left: .5rem !important; padding-right: .5rem !important; }
+			.px-3 { padding-left: 1rem!important; padding-right: 1rem !important; }
+			.px-4 { padding-left: 1.5rem!important; padding-right: 1.5rem !important; }
+			.px-5 { padding-left: 3rem!important; padding-right: 3rem !important; }
+			.px-auto { padding-left: auto!important; padding-right: auto !important; }
+			.py-0 { padding-top: 0 !important; padding-bottom: 0 !important; }
+			.py-1 { padding-top: .25rem !important; padding-bottom: .25rem !important; }
+			.py-2 { padding-top: .5rem !important; padding-bottom: .5rem !important; }
+			.py-3 { padding-top: 1rem !important; padding-bottom: 1rem !important; }
+			.py-4 { padding-top: 1.5rem !important; padding-bottom: 1.5rem !important; }
+			.py-5 { padding-top: 3rem !important; padding-bottom: 3rem !important; }
+			.py-auto { padding-top: auto !important; padding-bottom: auto !important; }
+			.g-0 { gap: 0 !important; }
+			.g-1 { gap: 0.25rem !important; }
+			.g-2 { gap: .5rem !important; }
+			.g-3 { gap: 1rem !important; }
+			.g-4 { gap: 1.5rem !important; }
+			.g-5 { gap: 3rem !important; }
+			.gx-0 { column-gap: 0 !important; }
+			.gx-1 { column-gap: 0.25rem !important; }
+			.gx-2 { column-gap: .5rem !important; }
+			.gx-3 { column-gap: 1rem !important; }
+			.gx-4 { column-gap: 1.5rem !important; }
+			.gx-5 { column-gap: 3rem !important; }
+			.gy-0 { row-gap: 0 !important; }
+			.gy-1 { row-gap: 0.25rem !important; }
+			.gy-2 { row-gap: .5rem !important; }
+			.gy-3 { row-gap: 1rem !important; }
+			.gy-4 { row-gap: 1.5rem !important; }
+			.gy-5 { row-gap: 3rem !important; }
+			.w-25 { width: 25%; }
+			.w-50 { width: 50%; }
+			.w-75 { width: 75%; }
+			.w-100 { width: 100%; }
+			.w-auto { width: auto; }
+			.mw-100 { max-width: 100% }
+			.h-25 { height: 25%; }
+			.h-50 { height: 50%; }
+			.h-75 { height: 75%; }
+			.h-100 { height: 100%; }
+			.h-auto { height: auto; }
+			.border { border: 1px solid var(--secondary); }
+			.border-primary { border-color: var(--primary) !important;}
+			.border-secondary { border-color: var(--secondary)!important;}
+			.border-success { border-color: var(--success)!important;}
+			.border-danger { border-color: var(--danger)!important;}
+			.border-warning { border-color: var(--warning)!important;}
+			.border-info { border-color: var(--info) !important;}
+			.border-light { border-color: var(--light) !important;}
+			.border-dark { border-color: var(--dark)!important;}
+			.border-muted { border-color: var(--muted) !important;}
+			.border-gray { border-color: var(--gray) !important;}
+			.border-0 { border: 0 !important; }
+			.border-1 { border-width: 0.1rem !important;}
+			.border-2 { border-width: 0.2rem!important;}
+			.border-3 { border-width: 0.3rem !important;}
+			.border-top{ border-top: 1px solid var(--secondary); }
+			.border-bottom{ border-bottom: 1px solid var(--secondary); }
+			.border-start{ border-left: 1px solid var(--secondary); }
+			.border-end{ border-right: 1px solid var(--secondary); }
+			thead{ display:table-header-group; }
+			tfoot{ display:table-footer-group; }
+			.table { 
+				width: 100%;
+				border-collapse: collapse;
+				margin-bottom: 1rem;
+				font-size: 14px;
+			}
+			/* .table thead { background: var(--gray); } */
+			.table-sm th, .table-sm td { padding: 6px 8px }
+			.table th { font-weight: 600; }
+			.table th, .table td {
+				padding: 10px 12px;
+				border-bottom: 1px solid var(--secondary); 
+				text-align: left;
+			}
+			.table-bordered { 
+				border: 1px solid var(--secondary); 
+			}
+			.table-bordered th, .table-bordered td { 
+				border: 1px solid var(--secondary); 
+			}
+			.table-borderless th, .table-borderless td { border: none }
+			.table-responsive { width: 100%; overflow-x: auto }
+			/* Row: flex container */
+			.row {
+				display: flex;
+				flex-wrap: wrap;
+				margin-right: calc(-0.5 * 0.25rem);
+				margin-left: calc(-0.5 * 0.25rem);
+			}
+			/* Columns: padding and width  .row > [class^="col"] {*/
+			.row > [class*="col"] {
+			padding-left: 0.5rem;
+			padding-right: 0.5rem;
+			box-sizing: border-box;
+			}
+			/* Column width: 12-column system */
+			.col { flex: 1; }
+			.col-1 { flex: 0 0 8.3333%; max-width: 8.3333%; }
+			.col-2 { flex: 0 0 16.6667%; max-width: 16.6667%; }
+			.col-3 { flex: 0 0 25%; max-width: 25%; }
+			.col-4 { flex: 0 0 33.3333%; max-width: 33.3333%; }
+			.col-5 { flex: 0 0 41.6667%; max-width: 41.6667%; }
+			.col-6 { flex: 0 0 50%; max-width: 50%; }
+			.col-7 { flex: 0 0 58.3333%; max-width: 58.3333%; }
+			.col-8 { flex: 0 0 66.6667%; max-width: 66.6667%; }
+			.col-9 { flex: 0 0 75%; max-width: 75%; }
+			.col-10 { flex: 0 0 83.3333%; max-width: 83.3333%; }
+			.col-11 { flex: 0 0 91.6667%; max-width: 91.6667%; }
+			.col-12 { flex: 0 0 100%; max-width: 100%; }
+			.row > * {
+				flex-shrink: 0;
+				width: 100%;
+				max-width: 100%;
+				padding-top: 0.25rem;
+				padding-bottom: 0.25rem;
+				padding-right: calc(2rem * 0.5);
+				padding-left: calc(2rem * 0.5);
+				word-break: break-all !important;
+			}
+			@media print{
+			body{ background:#fff; }
+			a{ color:#0b2b74; text-decoration:none; }
+			}
+		</style>
+	
+	
+		<div id="page" class="container">
+			<header id="pageHeader">
+				<div class="d-flex justify-between align-center border border-2 border-primary p-2">
+					<img src="${companyInfo.getLogoBase64()}" alt="" class="img-fluid" style="width:80px;">
+					<div class="text-center">
+						<div class="fw-bolder fs-4 text-uppercase text-primary">
+							<strong>MADHYA PRADESH PASCHIM KSHETRA VIDYUT VITRAN COMPANY LTD.</strong>
+						</div>
+						<div class="fw-bold fs-6">G.P.H. Compound, Pologround, Indore (M.P.) </div>
+						<div class="fw-bold fs-6">(Wholly owned by Govt. of M.P.)</div>
+						<div class="small">
+							<a class="text-decoration-none" href="${companyInfo.getWebsite()}" target="_blank">Website: https://www.mpwz.co.in</a> 
+						|
+							<a class="text-decoration-none" href="tel:${companyInfo.getCustomerCareNumber()}">Call Centre No. 1912</a>
+						</div>
+						<div class="tagline small">
+							GST No: <strong>23AADCM7397N1ZU</strong> |
+							CIN No: <strong>U40109MP2002SGC015121</strong>
+						</div>
+					</div>
+					<img src="${companyInfo.getAlternateLogoBase64()}" alt="" class="img-fluid" style="width:80px;">
+				</div>
+			</header>
+
+			<main class="pageContent">
+				<div class="my-3">
+					<div class="row">
+						<div class="col-6">
+							Electricity Bill No: <strong>${billSummary.getBillNo()}</strong>
+						</div>
+						<div class="col-6 text-end">
+							Bill Month: <strong>${billSummary.getBillMonth()}</strong>
+						</div>
+					</div>
+					<div class="row border border-2 bg-info2 my-1">
+						<div class="col-3">
+							<div class="text-muted small">Consumer No</div>
+							<div class="fw-bold">N${consumerInfo.getConsumerNo()}</div>
+						</div>
+						<div class="col-3">
+							<div class="text-muted small">Mobile No</div>
+							<div class="fw-bold">${consumerInfo.getMobileNo()}</div>
+						</div>
+						<div class="col-3">
+							<div class="text-muted small">Email</div>
+							<div class="fw-bold">${consumerInfo.getEmailId()}</div>
+						</div>
+						<div class="col-3">
+							<div class="text-muted small">Employee No</div>
+							<div class="fw-bold">${consumerInfo.getEmployeeNo()}</div>
+						</div>
+						<div class="col-6">
+							<div class="text-muted small">Consumer Name</div>
+							<div class="fw-bold">${consumerInfo.getConsumerName()}</div>
+						</div>
+						<div class="col-6">
+							<div class="text-muted small">Address</div>
+							<div class="fw-bold">${consumerInfo.getAddress()}</div>
+						</div>
+					</div>
+					<div class="row border border-2 bg-info2 my-1">
+						<div class="col-3">
+							<div class="text-muted small">Division Name</div>
+							<div class="fw-bold">${connectionInfo.getDivisionName()}</div>
+						</div>
+						<div class="col-3">
+							<div class="text-muted small">Zone / DC Name</div>
+							<div class="fw-bold">${connectionInfo.getLocationCode()} - ${connectionInfo.getZoneName()}</div>
+						</div>
+						<div class="col-3">
+							<div class="text-muted small">Group / RD No</div>
+							<div class="fw-bold">${connectionInfo.getGroupNo()} - ${connectionInfo.getReadingDiaryNo()}</div>
+						</div>
+						<div class="col-3">
+							@if("ACTIVE".equals(consumerInfo.getStatus()))
+								<div class="text-muted small">Connection Date</div>
+								<div class="fw-bold">${JteUtil.get(connectionInfo.getConnectionDate())}</div>
+							@else
+								<div class="text-muted small">Disconnection Date</div>
+								<div class="fw-bold">${JteUtil.get(billSummary.getPdcDate())}</div>
+							@endif
+						</div>
+						<div class="col-3">
+							<div class="text-muted small"> Feeder Code</div>
+							<div class="fw-bold">${connectionInfo.getFeederCode()}</div>
+						</div>
+						<div class="col-3">
+							<div class="text-muted small">DTR  Code</div>
+							<div class="fw-bold">${connectionInfo.getDtrCode()}</div>
+						</div>
+						<div class="col-3">
+							<div class="text-muted small"> Pole No</div>
+							<div class="fw-bold">${connectionInfo.getPoleNo()}</div>
+						</div>
+						<div class="col-3">
+							<div class="text-muted small">Tariff Category</div>
+							<div class="fw-bold">${connectionInfo.getTariffCategory()} (${connectionInfo.getTariffCode()})</div>
+						</div>
+						<div class="col-3">
+							<div class="text-muted small">Connection Type</div>
+							<div class="fw-bold">${connectionInfo.getConnectionType()}</div>
+						</div>
+						<div class="col-3">
+							<div class="text-muted small">Metering Status</div>
+							<div class="fw-bold">${connectionInfo.getMeteringStatus()}</div>
+						</div>
+						<div class="col-3">
+							<div class="text-muted small">Premise Type</div>
+							<div class="fw-bold">${connectionInfo.getAreaType()}</div>
+						</div>
+						<div class="col-3">
+							<div class="text-muted small">Purpose</div>
+							<div class="fw-bold">${connectionInfo.getPurpose()}</div>
+						</div>
+						<div class="col-3">
+							<div class="text-muted small">Phase</div>
+							<div class="fw-bold">${connectionInfo.getPhase()}</div>
+						</div>
+						<div class="col-3">
+							<div class="text-muted small">Sanctioned Load</div>
+							<div class="fw-bold">${JteUtil.get(connectionInfo.getSanctionedLoad())} ${connectionInfo.getSanctionedLoadUnit()}</div>
+						</div>
+						<div class="col-3">
+							<div class="text-muted small">Contract Demand</div>
+							<div class="fw-bold">${JteUtil.get(connectionInfo.getContractDemand())} ${connectionInfo.getContractDemandUnit()}</div>
+						</div>
+						<div class="col-3">
+							<div class="text-muted small">Prepaid</div>
+							<div class="fw-bold">@if(connectionInfo.isPrepaid()) Yes (${JteUtil.get(connectionInfo.getPrepaidDate())}) @else No @endif</div>
+						</div>
+						<div class="col-3">
+							<div class="text-muted small">Net Meter</div>
+							<div class="fw-bold">@if(connectionInfo.isNetMeter()) Yes @else No @endif</div>
+						</div>
+						
+						@if(connectionInfo.isNetMeter())
+							<div class="col-3">
+								<div class="text-muted small">Solar Plant Capacity</div>
+								<div class="fw-bold">${JteUtil.get(readInfo.getSolarPlantCapacity())}</div>
+							</div>
+							<div class="col-3">
+								<div class="text-muted small">VNM / GNM</div>
+								<div class="fw-bold">@if(connectionInfo.isNetMeterChild()) CHILD
+									@elseif(connectionInfo.isNetMeterParent()) PARENT @endif
+								</div>
+							</div>
+						@endif
+					</div>
+				</div>
+
+				<table class="table">
+					<thead>
+						<tr class="bg-secondary2 table-bordered">
+							<th class="text-center text-nowrap">Due Date</th>
+							<th class="text-center text-nowrap">Consumption</th>
+							<th class="text-center text-nowrap">Current Month Bill</th>
+							<th class="text-center text-nowrap">Previous Outstanding</th>
+							<th class="text-center text-nowrap">Pay Till Due Date</th>
+							<th class="text-center text-nowrap">Pay After Due Date</th>
+						</tr>
+						<tr class="table-bordered">
+							<th class="text-center word-break">${JteUtil.get(billSummary.getDueDate())}</th>
+							<th class="text-center word-break">${JteUtil.get(billSummary.getConsumption())}</th>
+							<th class="text-center word-break">₹ ${JteUtil.get(billSummary.getCurrentBill())}</th>
+							<th class="text-center word-break">₹ ${JteUtil.get(billSummary.getArrear())}</th>
+							<th class="text-center word-break">₹ ${JteUtil.get(billSummary.getPayableTillDueDate())}</th>
+							<th class="text-center word-break">₹ ${JteUtil.get(billSummary.getPayableAfterDueDate())}</th>
+						</tr>
+						<tr class="border">
+							<th>
+								<div class="text-muted small">Bill Date</div>
+								<div class="fw-bold word-break">${JteUtil.get(billSummary.getBillDate())}</div>
+							</th>
+							<th>
+								<div class="text-muted small">Bill type</div>
+								<div class="fw-bold word-break">${billSummary.getBillType()}</div>
+							</th>
+							<th>
+								<div class="text-muted small">Meter Reader</div>
+								<div class="fw-bold word-break">${billSummary.getMeterReaderName()}</div>
+							</th>
+							<th>
+								<div class="text-muted small">Bill Basis</div>
+								<div class="fw-bold word-break">${billSummary.getBillBasis()}</div>
+							</th>
+							<th rowspan="2" colspan="2" class="text-center border">
+								<div class="d-flex flex-column justify-center align-center h-100">
+									<div>Scan to Pay</div> 
+									<img src="${billSummary.getPaymentQuickResponseBase64()}" alt="" class="img-fluid flex-fill" style="width:80px;">
+								</div>
+							</th>
+						</tr>
+						<tr class="border">
+							<th>
+								<div class="text-muted small">Daily Avg. Of Bill</div>
+								<div class="fw-bold word-break">${JteUtil.get(billSummary.getDailyAverageBill())}</div>
+							</th>
+							<th>
+								<div class="text-muted small">Daily Avg. Units</div>
+								<div class="fw-bold word-break">${JteUtil.get(billSummary.getDailyAverageConsumption())}</div>
+							</th>
+							<th>
+								<div class="text-muted small">S.D. Held</div>
+								<div class="fw-bold word-break">${JteUtil.get(billSummary.getSdHeld())}</div>
+							</th>
+							<th>
+								<div class="text-muted small">S.D. Pending</div>
+								<div class="fw-bold word-break">${JteUtil.get(billSummary.getSdPending())}</div>
+							</th>
+						</tr>
+						<tr class="border">
+						<!-- @for(var contact : billTemplate.getContactInformationList()) -->
+							<th colspan="2">
+								<b>${contact.getDesignation()}:</b><br> <b>${contact.getOfficeName()}</b>
+							</th>
+							<th colspan="2">
+								<b>${contact.getName()}<br> ${contact.getContactNo()}</b>
+							</th>
+						<!-- @endfor -->
+							<th rowspan="2" colspan="2" class="text-center border">
+								<div>WhatsApp / Call Centre: 1912</div><img src="${companyInfo.getWhatsappQuickResponseBase64()}" alt="" class="img-fluid" style="width:80px;">
+							</th>
+						</tr>
+					</thead>
+
+				</table>
+				
+				<div class="my-3 page-break-avoid">
+					<div class="fw-bolder p-2 bg-primary">CONSUMPTION TREND (IN UNITS)</div>
+					<div class="flex-fill">
+						<img src="${billSummary.getConsumptionTrendBarChartBase64()}" alt="" class="img-fluid" style="min-height: 150px">
+					</div>
+				</div>
+
+				<div class="my-3 page-break-avoid">
+					<div class="fw-bolder p-2 bg-primary">ADVERTISEMENT / AWARENESS</div>
+					<div class="poster">
+						<img src="${adInfo.getPageOneZeroBase64Image()}" alt="" class="img-fluid" style="min-height: 150px">
+					</div>
+				</div>
+				
+				<div class="my-3">
+					<div class="fw-bolder p-2 bg-primary">Messages / Notes:</div>
+					@for(var message : billTemplate.getMessages())
+						<div class="p-2 small">${message}</div>
+					@endfor
+				</div>  
+
+
+				<div class="my-3 page-break-avoid">
+					<div class="fw-bolder p-2 bg-primary">CURRENT READING DETAILS</div>
+					<table class="table bg-info2">
+						<tbody><tr class="border">
+							<td>
+								<div class="text-muted small">METER S.NO.</div>
+								<div class="fw-bold word-break">${readInfo.getMeterSrNo()}</div>
+							</td>
+							<td>
+								<div class="text-muted small">READ DATE</div>
+								<div class="fw-bold word-break">${JteUtil.get(readInfo.getDate())}</div>
+							</td>
+							<td>
+								<div class="text-muted small">READ TYPE</div>
+								<div class="fw-bold word-break">${readInfo.getType()}</div>
+							</td>
+							<td>
+								<div class="text-muted small">READ SOURCE</div>
+								<div class="fw-bold word-break">${readInfo.getSource()}</div>
+							</td>
+							<td>
+								<div class="text-muted small">P.F</div>
+								<div class="fw-bold word-break">${JteUtil.get(billInfo.getPf())}</div>
+							</td>
+							<td>
+								<div class="text-muted small">MD</div>
+								<div class="fw-bold word-break">${JteUtil.get(billInfo.getMd())}</div>
+							</td>
+							<td>
+								<div class="text-muted small">EXPORT RESIDUAL UNITS  </div>
+								<div class="fw-bold word-break">${JteUtil.get(readInfo.getResidualUnit())}</div>
+							</td>	
+						</tr>
+					</tbody></table>
+					@if(connectionInfo.isNetMeter())
+						
+							!{var importRead = readInfo.getReadDetailList().getFirst();}
+							!{var exportRead = readInfo.getReadDetailList().get(1);}
+							<table class="table table-bordered">
+							<thead>
+							<tr class="bg-secondary2">
+								<th>Particulars</th>
+								<th class="text-end">Current Reading</th>
+								<th class="text-end">Previous Reading</th>
+								<th class="text-end">M.F.</th>
+								<th class="text-end">Metered Units</th>
+								<th class="text-end">Assessed Units</th>
+								<th class="text-end">Final Consumption</th>
+							</tr>
+							</thead>
+							<tbody><tr>
+								<td>IMPORT</td>
+								<td class="text-end word-break"><b>${JteUtil.get(importRead.getCurrentRead())}</b></td>
+								<td class="text-end word-break"><b>${JteUtil.get(importRead.getPreviousRead())}</b></td>
+								<td class="text-end word-break"><b>${JteUtil.get(importRead.getMf())}</b></td>
+								<td class="text-end word-break"><b>${JteUtil.get(importRead.getMeteredUnit())}</b></td>
+								<td class="text-end word-break"><b>${JteUtil.get(importRead.getAssessment())}</b></td>
+								<td class="text-end word-break"><b>${JteUtil.get(importRead.getBilledUnit())}</b></td>
+							</tr>
+							<tr>
+								<td>EXPORT</td>
+								<td class="text-end word-break"><b>${JteUtil.get(exportRead.getCurrentRead())}</b></td>
+								<td class="text-end word-break"><b>${JteUtil.get(exportRead.getPreviousRead())}</b></td>
+								<td class="text-end word-break"><b>${JteUtil.get(exportRead.getMf())}</b></td>
+								<td class="text-end word-break"><b>${JteUtil.get(exportRead.getMeteredUnit())}</b></td>
+								<td class="text-end word-break"><b>${JteUtil.get(exportRead.getAssessment())}</b></td>
+								<td class="text-end word-break"><b>${JteUtil.get(exportRead.getBilledUnit())}</b></td>
+							</tr>
+							<tr class="">
+								<td colspan="4">Residual Units Adjusted</td>
+								<td class="text-end word-break" colspan="3">${JteUtil.get(readInfo.getResidualUnitAdjusted())}</td>
+							</tr>
+							<tr class="">
+								<td colspan="4" style="text-align:center;">Net</td>
+								<td class="text-end word-break">${JteUtil.get(readInfo.getNetMeteredUnit())}</td>
+								<td class="text-end word-break"></td>
+								<td class="text-end word-break">${JteUtil.get(readInfo.getNetBilledUnit())}</td>
+							</tr>
+							</tbody>
+						</table>
+					@else
+						!{var read = readInfo.getReadDetailList().getFirst();}
+						<table class="table table-bordered">
+							<tbody><tr class="bg-secondary2">
+								<th class="text-end">Current Reading</th>
+								<th class="text-end">Previous Reading</th>
+								<th class="text-end">M.F.</th>
+								<th class="text-end">Metered Units</th>
+								<th class="text-end">Assessed Units</th>
+								<th class="text-end">Total Units</th>
+							</tr>
+							<tr>
+								<td class="text-end word-break"><b>${JteUtil.get(read.getCurrentRead())}</b></td>
+								<td class="text-end word-break"><b>${JteUtil.get(read.getPreviousRead())}</b></td>
+								<td class="text-end word-break"><b>${JteUtil.get(read.getMf())}</b></td>
+								<td class="text-end word-break"><b>${JteUtil.get(read.getMeteredUnit())}</b></td>
+								<td class="text-end word-break"><b>${JteUtil.get(read.getAssessment())}</b></td>
+								<td class="text-end word-break"><b>${JteUtil.get(read.getBilledUnit())}</b></td>
+							</tr>
+						</tbody></table>
+					@endif
+				</div>
+
+				<div class="my-3 page-break-avoid">
+					<div class="fw-bolder p-2 bg-primary">DETAILED BILL BREAKUP </div>
+					<div class="fw-bold text-center bg-info2 py-2">Billing Charges Information</div>
+					<div class="d-flex flex-equal gx-3">
+						<table class="table table-bordered">
+							<tbody><tr>
+								<td colspan="2" class="bg-secondary2 fw-bold">Energy</td>
+							</tr>
+							<tr>
+								<td>Energy charges</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getEnergyCharge())}</b></td>
+							</tr>
+							<tr>
+								<td>Fuel &amp; Power Purchase Adjustment Surcharge</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getFppas())}</b></td>
+							</tr>
+							<tr>
+								<td>Fixed charges</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getFixedCharge())}</b></td>
+							</tr>
+							<tr class="bg-info2 fw-bold">
+								<td>Sub Total</td>
+								<td class="text-end word-break">
+									<b>${JteUtil.get(billInfo.getSubTotalOne())}</b></td>
+							</tr>
+
+							<tr>
+								<td>Electricity Duty</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getElectricityDuty())}</b></td>
+							</tr>
+							<tr>
+								<td>CCB Adjustment</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getCcbAdjustment())}</b></td>
+							</tr>
+							<tr class="bg-info2 fw-bold">
+								<td>Sub Total</td>
+								<td class="text-end word-break">${JteUtil.get(billInfo.getSubTotalTwo())}</td>
+							</tr>
+
+							<tr>
+								<td colspan="2" class="bg-secondary2 fw-bold">Rebate / Charges</td>
+							</tr>
+							<tr>
+								<td>Penal Charge (+)</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getPenalCharge())}</b></td>
+							</tr>
+							<tr>
+								<td>PF Surcharge / Incentive (+/-)</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getPfSurchargeOrIncentive())}</b></td>
+							</tr>
+							<tr>
+								<td>ASD Installments (+)</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getAsdInstallment())}</b></td>
+							</tr>
+							<tr>
+								<td>TOD Rebate / Surcharge (+/-)</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getTodRebateOrSurcharge())}</b></td>
+							</tr>
+							<tr>
+								<td>Interest on Security Deposit (-)</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getSdInterest())}</b></td>
+							</tr>
+							<tr>
+								<td>Load Factor Incentive</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getLocdFactorIncentive())}</b></td>
+							</tr>
+							<tr>
+								<td>Lock Credit</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getLockCredit())}</b></td>
+							</tr>
+							<tr>
+								<td>Employee Rebate (-)</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getEmployeeRebate())}</b></td>
+							</tr>
+							<tr>
+								<td>Prepaid Payment Rebate (-)</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getPrepaidPaymentRebate())}</b></td>
+							</tr>
+							<tr>
+								<td>Online Payment Rebate (-)</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getOnlinePaymentRebate())}</b></td>
+							</tr>
+							<tr>
+								<td>Prompt Payment Incentive (-)</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getPromptPaymentIncentive())}</b></td>
+							</tr>
+							<tr>
+								<td>Advance Payment Incentive (-)</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getAdvancePaymentIncentive())}</b></td>
+							</tr>
+							<tr>
+								<td>Demand Side Incentive (-)</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getDemandSideIncentive())}</b></td>
+							</tr>
+							<tr>
+								<td>Wheeling Charge / Green Energy Charge (+)</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getWheelingCharge())}</b></td>
+							</tr>
+							<tr class="bg-info2 fw-bold">
+								<td>Sub Total</td>
+								<td class="text-end word-break">${JteUtil.get(billInfo.getSubTotalThree())}</td>
+							</tr>
+						</tbody></table>
+						
+						<table class="table table-bordered">
+							<tbody><tr>
+								<td colspan="2" class="bg-secondary2 fw-bold">Subsidy</td>
+							</tr>
+							<tr>
+								<td><b>Subsidy (M.P. Govt.)</b></td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getSubsidy())}</b></td>
+							</tr>
+							<tr class="bg-success2 fw-bold">
+								<td>Current Month Bill</td>
+								<td class="text-end word-break">${JteUtil.get(billInfo.getSubTotalFour())}</td>
+							</tr>
+							<tr>
+								<td colspan="2" class="bg-secondary fw-bold">Arrear</td>
+							</tr>
+							<tr>
+								<td>Principal arrear</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getPrincipalArrear())}</b></td>
+							</tr>
+							<tr>
+								<td>Cumulative surcharge</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getCumulativeSurcharge())}</b></td>
+							</tr>
+							<tr>
+								<td>ASD Arrear</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getAsdArrear())}</b></td>
+							</tr>
+							<tr class="fw-bold bg-warning2">
+								<td>Net Bill</td>
+								<td class="text-end word-break">${JteUtil.get(billInfo.getNetBill())}</td>
+							</tr>
+							<tr>
+								<td colspan="2" class="bg-secondary2 fw-bold">Payments</td>
+							</tr>
+							<tr>
+								<td>Payment Received Against Bill &amp; Vigilance</td>
+								<td class="text-end word-break"><b>${billInfo.getPaymentForBillAndVigilance()}</b></td>
+							</tr>
+							<tr>
+								<td>Payment Received Against Smart Meter RC/DC</td>
+								<td class="text-end word-break"><b>${billInfo.getPaymentForSmartMeterRCDC()}</b></td>
+							</tr>
+							<tr>
+								<td colspan="2" class="bg-secondary2 fw-bold">Dues</td>
+							</tr>
+							<tr>
+								<td>Vigilance / O&amp;M Due Amount</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getVigilanceDueAmount())}</b></td>
+							</tr>
+							<tr>
+								<td>Interest on Vigilance / O&amp;M Due (Till Billing Period)</td>
+								<td class="text-end word-break"><b>${JteUtil.get(billInfo.getVigilanceDueInterestAmount())}</b></td>
+							</tr>
+							<tr class="fw-bold bg-danger2 word-break">
+								<td>
+									Total Amount Payable
+									@if(billInfo.getTotalPayableAmount().compareTo(BigDecimal.ZERO) &lt; 0)
+										(Not for Payment)
+									@endif
+								</td>
+								<td class="text-end">${JteUtil.get(billInfo.getTotalPayableAmount())}</td>
+							</tr>
+							<tr>
+							<td colspan="2" rowspan="10">
+								<img src="${adInfo.getPageTwoOneBase64Image()}" alt="" class="img-fluid" style="min-height: 200px">
+							</td>
+							</tr>
+						</tbody></table>
+					</div> 
+				</div>
+
+				@if(connectionInfo.isNetMeter() &amp;&amp; !GlobalUtil.isEmpty(todInfo.getTodNetMeterDetailList()))
+					<div class="my-3 page-break-avoid">
+						<div class="fw-bolder p-2 bg-primary">TOD DETAILS</div>
+						
+							@for(var tod : todInfo.getTodNetMeterDetailList())
+								
+									@if("IMPORT".equals(tod.getNetMeterType()))
+										
+									@endif
+									
+									@if("IMPORT".equals(tod.getNetMeterType()))
+										
+									@endif
+									@if("IMPORT".equals(tod.getNetMeterType()))
+										
+									@endif
+								
+							@endfor
+						<table class="table table-bordered">
+							<tbody><tr class="bg-secondary2">
+								<th class="text-center">TOD</th>
+								<th class="text-center">Particulars</th>
+								<th class="text-end">Current Read</th>
+								<th class="text-end">Previous Read</th>
+								<th class="text-end">Meter Consumption</th>
+								<th class="text-end">Assessed Units</th>
+								<th class="text-end">Final Consumption</th>
+								<th class="text-end">Net</th>
+								<th class="text-end">Amount</th>
+							</tr><tr><td rowspan="2">
+											<strong>${tod.getType()}</strong><br>
+											<span class="small">${tod.getDemandHour()}</span>
+										</td><td>${tod.getNetMeterType()}</td>
+									<td class="text-end word-break">${JteUtil.get(tod.getCurrentRead())}</td>
+									<td class="text-end word-break">${JteUtil.get(tod.getPreviousRead())}</td>
+									<td class="text-end word-break">${JteUtil.get(tod.getMeterConsumption())}</td>
+									<td class="text-end word-break">${JteUtil.get(tod.getAssessment())}</td>
+									<td class="text-end word-break">${JteUtil.get(tod.getFinalConsumption())}</td><td class="text-end word-break" rowspan="2">${JteUtil.get(tod.getNetConsumption())}</td><td class="text-end word-break" rowspan="2">${JteUtil.get(tod.getAmount())}</td></tr></tbody></table>
+					</div>
+				@elseif(!connectionInfo.isNetMeter() &amp;&amp; todInfo != null &amp;&amp; !GlobalUtil.isEmpty(todInfo.getTodDetailList()))
+					<div class="my-3 page-break-avoid">
+						<div class="fw-bolder p-2 bg-primary">TOD DETAILS</div>
+						
+							@for(var tod : todInfo.getTodDetailList())
+								
+							@endfor
+						<table class="table table-bordered">
+							<tbody><tr>
+								<td rowspan="3" class="text-center">
+									<img src="${todInfo.getTodPieChartBase64Image()}" alt="" class="img-fluid" style="min-height: 180px">
+								</td>
+							</tr>
+							<tr class="bg-secondary2">
+								<th class="text-center">TIMING</th>
+								<th class="text-end">Units</th>
+								<th class="text-end">Amount (₹)</th>
+							</tr><tr>
+									<td class="text-center">
+										<strong>${tod.getType()}</strong><br>
+										<span class="small">${tod.getDemandHour()}</span>
+									</td>
+									<td class="text-end word-break">${JteUtil.get(tod.getUnit())}</td>
+									<td class="text-end word-break">${JteUtil.get(tod.getAmount())}</td>
+								</tr></tbody></table>
+					</div>	
+				@endif
+				
+				<div class="my-3 page-break-avoid">
+					<div class="fw-bolder p-2 bg-primary">LAST TWO PAYMENT</div>
+					
+						@for(var payment : billTemplate.getPaymentHistoryInformationList())
+							
+						@endfor
+					<table class="table table-bordered">
+						<tbody><tr class="bg-secondary2">
+							<th class="text-center">Last Payment Month</th>
+							<th class="text-center">Payment Date</th>
+							<th class="text-center">Mode</th>
+							<th class="text-center">Payment Ref. No.</th>
+							<th class="text-end">Amount Paid (₹)</th>
+							
+						</tr><tr>
+								<td class="text-center">${payment.getPayMonth()}</td>
+								<td class="text-center">${JteUtil.get(payment.getPayDate())}</td>
+								<td class="text-center">${payment.getPayMode()}</td>
+								<td class="text-center">${payment.getCacNo()}</td>
+								<td class="text-end"><b>${payment.getAmount()}</b></td>
+							</tr></tbody></table>
+				</div>
+				
+				<div class="my-3 page-break-avoid">
+					<div class="fw-bolder p-2 bg-primary">LAST SIX MONTHS CONSUMPTION</div>
+					
+						@for(var read : billTemplate.getReadHistoryInformationList())
+							
+						@endfor
+					<table class="table table-bordered">
+						<tbody><tr class="bg-secondary2">
+							<th class="text-center">Bill Month</th>
+							<th class="text-center">Bill Date</th>
+							<th class="text-end">Reading</th>
+							<th class="text-end">Units</th>
+						</tr><tr>
+								<td class="text-center">${read.getBillMonth()}</td>
+								<td class="text-center">${JteUtil.get(read.getReadDate())}</td>
+								<td class="text-end">${JteUtil.get(read.getReading())}</td>
+								<td class="text-end">${JteUtil.get(read.getUnit())}</td>
+							</tr></tbody></table>
+				</div>
+
+				@if(connectionInfo.isNetMeter())
+					@if(meterReplacementInfo != null &amp;&amp; !GlobalUtil.isEmpty(meterReplacementInfo.getNetMeterReplacementDetailList()))
+						<div class="my-3 page-break-avoid">
+							<div class="fw-bolder p-2 bg-primary">METER REPLACEMENT AND READ DETAIL</div>
+							
+								@for(var replacement : meterReplacementInfo.getNetMeterReplacementDetailList())
+									
+								@endfor
+								<table class="table table-bordered">
+								<thead class="bg-secondary2">
+								<tr>
+									<th rowspan="2" class="text-center">Meter Detail</th>
+									<th rowspan="2" class="text-center">Replacement Date</th>
+									<th colspan="3" class="text-center">Import</th>
+									<th colspan="3" class="text-center">Export</th>
+									<th rowspan="2" class="text-center">Net Consumption</th>
+								</tr>
+								<tr>
+									<th class="text-end">Prev / Start Read</th>
+									<th class="text-end">Final / Current Read</th>
+									<th class="text-end">Consumption</th>
+									<th class="text-end">Prev / Start Read</th>
+									<th class="text-end">Final / Current Read</th>
+									<th class="text-end">Consumption</th>
+								</tr>
+								</thead>
+								<tbody><tr>
+										<td class="text-center word-break">${replacement.getMeterDetail()}</td>
+										<td class="text-center word-break">${JteUtil.get(replacement.getReplacementDate())}</td>
+										<td class="text-end word-break">${JteUtil.get(replacement.getImportPreviousRead())}</td>
+										<td class="text-end word-break">${JteUtil.get(replacement.getImportCurrentRead())}</td>
+										<td class="text-end word-break">${JteUtil.get(replacement.getImportConsumption())}</td>
+										<td class="text-end word-break">${JteUtil.get(replacement.getExportPreviousRead())}</td>
+										<td class="text-end word-break">${JteUtil.get(replacement.getExportCurrentRead())}</td>
+										<td class="text-end word-break">${JteUtil.get(replacement.getExportConsumption())}</td>
+										<td class="text-end word-break">${JteUtil.get(replacement.getNetConsumption())}</td>
+									</tr></tbody>
+							</table>
+						</div>
+					@endif
+				@else
+					@if(meterReplacementInfo != null &amp;&amp; !GlobalUtil.isEmpty(meterReplacementInfo.getMeterReplacementDetailList()))
+						<div class="my-3 page-break-avoid">
+							<div class="fw-bolder p-2 bg-primary">METER REPLACEMENT AND READ DETAIL</div>
+							
+								@for(var replacement : meterReplacementInfo.getMeterReplacementDetailList())
+									
+								@endfor
+							<table class="table table-bordered">
+								<tbody><tr class="bg-secondary2">
+									<th class="text-center">Meter Detail</th>
+									<th class="text-center">Replacement Date</th>
+									<th class="text-end">Prev / Start Read</th>
+									<th class="text-end">Final / Current Read</th>
+									<th class="text-end">Consumption</th>
+									<th class="text-end">Prorated Current Bill</th>
+								</tr><tr>
+										<td class="text-center word-break">${replacement.getMeterDetail()}</td>
+										<td class="text-center word-break">${JteUtil.get(replacement.getReplacementDate())}</td>
+										<td class="text-end word-break">${JteUtil.get(replacement.getPreviousRead())}</td>
+										<td class="text-end word-break">${JteUtil.get(replacement.getCurrentRead())}</td>
+										<td class="text-end word-break">${JteUtil.get(replacement.getConsumption())}</td>
+										<td class="text-end word-break">${JteUtil.get(replacement.getProratedCurrentBill())}</td>
+									</tr></tbody></table>
+						</div>
+					@endif
+				@endif
+
+				@if(connectionInfo.isNetMeterParent() &amp;&amp; !GlobalUtil.isEmpty(billTemplate.getNetMeterChildInformationList()))
+					<div class="my-3 page-break-avoid">
+						<div class="fw-bolder p-2 bg-primary">GNM / VNM CHILD CONNECTION EXPORT DETAIL</div>
+						
+							@for(var child : billTemplate.getNetMeterChildInformationList())
+								
+							@endfor
+						<table class="table table-bordered">
+							<tbody><tr class="bg-secondary2">
+								<th class="text-center">Consumer No</th>
+								<th class="text-end">Ratio</th>
+								<th class="text-end">Current Read</th>
+								<th class="text-end">Previous Read</th>
+								<th class="text-end">M. F.</th>
+								<th class="text-end">Meter Consumption</th>
+								<th class="text-end">Assessment</th>
+								<th class="text-end">Final Consumption</th>
+							</tr><tr>
+									<td class="text-center word-break">${child.getConsumerNo()}</td>
+									<td class="text-end word-break">${JteUtil.get(child.getRatio())}</td>
+									<td class="text-end word-break">${JteUtil.get(child.getCurrentRead())}</td>
+									<td class="text-end word-break">${JteUtil.get(child.getPreviousRead())}</td>
+									<td class="text-end word-break">${JteUtil.get(child.getMf())}</td>
+									<td class="text-end word-break">${JteUtil.get(child.getMeterConsumption())}</td>
+									<td class="text-end word-break">${JteUtil.get(child.getAssessment())}</td>
+									<td class="text-end word-break">${JteUtil.get(child.getFinalConsumption())}</td>
+								</tr></tbody></table>
+					</div>
+				@endif
+
+				@if(!GlobalUtil.isEmpty(billTemplate.getBillCalculationInformationList()))
+					<div class="my-3 page-break-avoid">
+						<div class="fw-bolder p-2 bg-primary">HEAD WISE BILL CALCULATION DETAIL</div>
+						
+							@for(var calculation : billTemplate.getBillCalculationInformationList())
+								
+							@endfor
+						<table class="table table-bordered">
+							<tbody><tr class="bg-secondary2">
+								<th>Head</th>
+								<th>Slab</th>
+								<th class="text-end">Rate (₹)</th>
+								<th class="text-end">Unit</th>
+								<th class="text-end">Amount (₹)</th>
+							</tr><tr>
+									<td>${calculation.getHead()}</td>
+									<td>${calculation.getSlab()}</td>
+									<td class="text-end word-break">${calculation.getRate()}</td>
+									<td class="text-end word-break">${calculation.getUnit()}</td>
+									<td class="text-end word-break">${calculation.getAmount()}</td>
+								</tr></tbody></table>
+					</div>
+				@endif
+				
+				
+				@if(!GlobalUtil.isEmpty(billTemplate.getVigilanceInformationList()))
+					<div class="my-3 page-break-avoid">
+						<div class="fw-bolder p-2 bg-primary">OTHER ACCOUNT DETAILS</div>
+						<div class="fw-bold p-2 bg-info2">Vigilance / O&amp;M Panchanama Detail</div>
+						!{var mid = (int) Math.ceil((double) billTemplate.getVigilanceInformationList().size()/2);}
+						<div class="d-flex flex-equal gx-3">
+							
+								@for(int index = 0; index &lt; mid; index++)
+									!{var vigilance = billTemplate.getVigilanceInformationList().get(index);}
+									
+								@endfor
+							<table class="table table-bordered">
+								<tbody><tr class="bg-secondary2">
+									<th>Description</th>
+									<th class="text-end">Amount (₹)</th>
+								</tr><tr>
+										<td>${index} - ${vigilance.getDescription()}</td>
+										<td class="text-end">${JteUtil.get(vigilance.getAmount())}</td>
+									</tr></tbody></table>
+							@if(mid &lt; billTemplate.getVigilanceInformationList().size())
+								
+									@for(int index = mid; index &lt; billTemplate.getVigilanceInformationList().size(); index++)
+										!{var vigilance = billTemplate.getVigilanceInformationList().get(index);}
+										
+									@endfor
+								<table class="table table-bordered">
+									<tbody><tr class="bg-secondary2">
+										<th>Description</th>
+										<th class="text-end">Amount (₹)</th>
+									</tr><tr>
+											<td>${index} - ${vigilance.getDescription()}</td>
+											<td class="text-end">${JteUtil.get(vigilance.getAmount())}</td>
+										</tr></tbody></table>
+							@endif
+						</div>
+					</div>
+				@endif
+		
+							
+				@if(!GlobalUtil.isEmpty(billTemplate.getAdjustmentInformationList()))
+					<div class="my-3 page-break-avoid">
+						<div class="fw-bolder p-2 bg-primary">CCB ADJUSTMENT DETAIL</div>
+						!{var mid = (int) Math.ceil((double) billTemplate.getAdjustmentInformationList().size()/2);}
+						<div class="d-flex flex-equal gx-3">
+							
+								@for(int index = 0; index &lt; mid; index++)
+									!{var adjustment = billTemplate.getAdjustmentInformationList().get(index);}
+									
+								@endfor
+							<table class="table table-bordered">
+								<tbody><tr class="bg-secondary2">
+									<th>Description</th>
+									<th class="text-end">Amount (₹)</th>
+								</tr><tr>
+										<td>${index} - ${adjustment.getDescription()}</td>
+										<td class="text-end">${JteUtil.get(adjustment.getAmount())}</td>
+									</tr></tbody></table>
+							@if(mid &lt; billTemplate.getAdjustmentInformationList().size())
+								
+									@for(int index = mid; index &lt; billTemplate.getAdjustmentInformationList().size(); index++)
+										!{var adjustment = billTemplate.getAdjustmentInformationList().get(index);}
+										
+									@endfor
+								<table class="table table-bordered">
+									<tbody><tr class="bg-secondary2">
+										<th>Description</th>
+										<th class="text-end">Amount (₹)</th>
+									</tr><tr>
+											<td>${index} - ${adjustment.getDescription()}</td>
+											<td class="text-end">${JteUtil.get(adjustment.getAmount())}</td>
+										</tr></tbody></table>
+							@endif
+						</div>
+					</div>
+				@endif
+			
+				@if(!GlobalUtil.isEmpty(billTemplate.getEcgrfInformationList()))
+					<div class="my-3 page-break-avoid">
+						<div class="fw-bolder p-2 bg-primary">CIRCLE LEVEL ELECTRICITY CONSUMERS GRIEVANCE REDRESSAL FORUM (ECGRF)</div>
+						
+							@for(var ecgrf : billTemplate.getEcgrfInformationList())
+								
+							@endfor
+						<table class="table table-bordered">
+							<tbody><tr class="bg-secondary2">
+								<th>Member Type</th>
+								<th>Name</th>
+								<th class="text-center">Contact No.</th>
+								<th>Member Type</th>
+							</tr><tr>
+									<td>${ecgrf.getMemberType()}</td>
+									<td>${ecgrf.getName()}</td>
+									<td class="text-center">${ecgrf.getContactNo()}</td>
+									<td>${ecgrf.getCaseHandling()}</td>
+								</tr></tbody></table>
+					</div>
+				@endif
+
+				<div class="my-3 page-break-avoid ">
+					<div class="fw-bolder p-2 bg-primary">ADVERTISEMENTS</div>
+					@if(adInfo.getLastPageBase64Image() !=null &amp;&amp; !adInfo.getLastPageBase64Image().isEmpty())
+						@for(var adImage : adInfo.getLastPageBase64Image())
+							<div class="flex-fill">
+								<img src="${adImage}" alt="" class="img-fluid" style="min-height: 150px;">
+							</div>
+						@endfor
+					@endif
+				</div>
+			</main>
+
+			<footer id="pageFooter" class="d-none">
+				<div class="d-flex justify-between text-muted small">
+					<div>${consumerInfo.getConsumerNo()}</div>
+					<div>${billSummary.getBillMonth()}</div>
+					<div>Page <span class="page-number"></span> of <span class="total-pages"></span></div>
+				</div>
+			</footer>
+		</div>
+	
+
+</body></html>
