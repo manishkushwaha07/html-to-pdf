@@ -57,6 +57,7 @@ function log(level, color, message, ...args) {
 const logger = {
   // info: (msg, ...args) => log("info", COLORS.info, msg, ...args),
   log:     (msg, ...args) => console.log(msg, args),
+  dir:     (msg, ...args) => console.dir(msg, { depth: null, colors: true }),
   info:    (msg, ...args) => console.log(`${COLORS.info}[INFO]     ${COLORS.reset}${msg}`),
   warn:    (msg, ...args) => console.warn(`${COLORS.warn}[WARN]     ${COLORS.reset}${msg}`),
   error:   (msg, ...args) => console.error(`${COLORS.error}[ERROR]    ${COLORS.reset}${msg}`),
