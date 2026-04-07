@@ -17,12 +17,12 @@ const path = require('path');
 const cluster = require('cluster');
 const logger = require("./logger");
 
-const WORKER_FILE = process.env.WORKER_FILE || "pw-pool.js";
+const WORKER_FILE = process.env.WORKER_FILE || "pdf.js";
 logger.info(`Worker: ${WORKER_FILE}`);
 if (cluster.isPrimary) {
   logger.info(`Master ${process.pid} is running`);
 
-  const cpuCount = os.cpus().length;
+  const cpuCount = os.availableParallelism();;
   logger.info(`Forking for ${cpuCount} CPUs`);
 
   for (let i = 0; i < cpuCount; i++) {

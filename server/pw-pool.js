@@ -15,13 +15,117 @@ const PQueue = require("p-queue").default;
 // ------------------- CONFIG ------------------- //
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
 const PORT = process.env.PORT || 5000;
-const RAM_GB = os.totalmem() / (1024 ** 3);
 const CORES = os.availableParallelism() || os.cpus().length;
 
 const CONFIG = {
-  queueMaxSize: 5000,
-  pageMaxPoolSize: 2,
+  queueMaxSize: 1000,
 }
+
+// ------------------- BROWSER ------------------- //
+let browser, context;
+
+const browserOpts = {
+  headless: true,                // run without UI
+  // channel: "chromium",           // chrome | chromium | msedge
+  args: [
+    "--no-sandbox",
+    "--disable-gpu",
+    "--disable-sync",
+    "--disable-translate",
+    "--disable-extensions",
+    "--disable-default-apps",
+    "--disable-dev-shm-usage",
+    "--disable-setuid-sandbox",
+    "--disable-background-networking",
+    "--disable-renderer-backgrounding",
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-features=IsolateOrigins,site-per-process",
+    "--blink-settings=imagesEnabled=false",
+    "--font-render-hinting=medium",
+    "--metrics-recording-only",
+    "--no-first-run",
+    "--mute-audio",
+  ],
+};
+
+async function initBrowser() {
+  logger.info("Browser launching...");
+  try{
+    if(browser && browser.isConnected()){ 
+      await browser.close().catch(() => {}); 
+    }
+    await launchBrowser();
+
+    browser.on("disconnected", async () => {
+      if(isShuttingDown) { return; }
+      logger.error("Browser crashed. Restarting...");
+      await launchBrowser();
+    });
+
+    logger.success("Browser launch successfully");
+    return browser;
+  }catch(error){
+    logger.error("Browser launch failed:", error);
+    throw error;
+  }
+}
+
+async function launchBrowser(){
+  try{
+    browser = await chromium.launch(browserOpts);
+    await initContext();
+  }catch(error){ throw error; } 
+}
+
+// ------------------- CONTEXT & PAGE POOL ------------------- //
+async function initContext(){
+  context = await browser.newContext({javaScriptEnabled: false, bypassCSP: true, colorScheme: "light" });
+}
+
+const pagePoolOpts = {
+  min: 0,
+  max: CORES * 2,
+  idleTimeoutMillis: 30000,
+  acquireTimeoutMillis: 20000,
+  evictionRunIntervalMillis: 10000,
+  autostart: true,
+  testOnBorrow: true,
+};
+
+const pagePool = genericPool.createPool(
+  {
+    create: async () => {
+      const page = await context.newPage();
+      await page.goto("about:blank");
+      await configurePage(page);
+      return { context, page };
+    },
+    destroy: async ({ context, page }) => {
+     try { await page.close(); } catch {}
+    },
+    validate: () => browser && browser.isConnected()
+  },
+  pagePoolOpts,
+);
+
+async function configurePage(page) {
+  if(page._configured) { return; }
+
+  await page.route("**/*", (route) => {
+    const type = route.request().resourceType();
+    // if (type !== "document") { return route.abort(); }
+    if(["image", "font", "stylesheet", "media", "xhr", "fetch"].includes(type)) {
+      return route.abort();
+    }
+    route.continue();
+  });
+  // await page.setViewportSize({ width: 1280, height: 720 });
+  await page.setDefaultNavigationTimeout(10000);
+  await page.setDefaultTimeout(20000);
+  page._configured = true;
+}
+
 
 async function getProcess(pid){
   return await pidusage(pid);
@@ -55,24 +159,25 @@ function getSystemCPUUsage() {
   return (1 - idleDiff / totalDiff) * 100;
 }
 
-// ------------------- QUEUE ------------------- //
 function getConcurrency() {
   const cpuCount = CORES;
-  const perjobMem = 300 * 1024 * 1024; // 300MB
+  const perjobMem = 0.1; // 300MB
   const freeMem = os.freemem() / (1024 ** 3); // GB
   const memLimit = Math.floor(freeMem / perjobMem);
-  const freeMemRatio = os.freemem() / os.totalmem();
-  const cpuUsage = getSystemCPUUsage();
-  
   let concurrency = Math.min(cpuCount * 2, memLimit);
+  
+  const cpuUsage = getSystemCPUUsage();
   if(cpuUsage > 85){ concurrency -= 1; }
   if(cpuUsage < 60){ concurrency += 1; }
-  if(freeMemRatio < 0.2){ concurrency -= 1; }
-  if(freeMemRatio > 0.4){ concurrency += 1; }
+  
+  // const freeMemRatio = os.freemem() / os.totalmem();
+  // if(freeMemRatio < 0.2){ concurrency -= 1; }
+  // if(freeMemRatio > 0.4){ concurrency += 1; }
+  
   return Math.max(CORES, concurrency);
 }
 
-const queue = new PQueue({ concurrency: getConcurrency(), timeout: 10 *60 * 1000, throwOnTimeout: true });
+const queue = new PQueue({ concurrency: getConcurrency(), timeout: 60 * 1000, throwOnTimeout: true });
 queue.on('active', () => {
   // logger.log(`Queue active: ${queue.size} waiting, ${queue.pending} running`);
 });
@@ -80,134 +185,6 @@ queue.on('active', () => {
 function getQueueStats(){
   return { concurrency: queue.concurrency, waiting: queue.size, running: queue.pending };
 }
-
-// ------------------- BROWSER ------------------- //
-let browser, context;
-
-const browserOpts = {
-  headless: true,                // run without UI
-  // channel: "chromium",           // chrome | chromium | msedge
-  args: [
-    "--no-sandbox",
-    "--disable-gpu",
-    "--disable-sync",
-    "--disable-translate",
-    "--disable-extensions",
-    "--disable-default-apps",
-    "--disable-dev-shm-usage",
-    "--disable-setuid-sandbox",
-    "--disable-background-networking",
-    "--disable-renderer-backgrounding",
-    "--disable-background-timer-throttling",
-    "--disable-backgrounding-occluded-windows",
-    "--disable-features=IsolateOrigins,site-per-process",
-    "--blink-settings=imagesEnabled=false",
-    "--font-render-hinting=medium",
-    "--metrics-recording-only",
-    "--no-first-run",
-    "--mute-audio",
-  ],
-};
-
-async function startBrowser() {
-  logger.info("Browser launching...");
-  try{
-    if(browser){ await browser.close().catch((error) => {
-      logger.error("Error closing existing browser:", error);
-    });}
-    
-    await launchBrowser();
-
-    browser.on("disconnected", async () => {
-      if(isShuttingDown) { return; }
-      logger.error("Browser crashed. Restarting...");
-      await launchBrowser();
-    });
-
-    logger.success("Browser launch successfully");
-    return browser;
-  }catch(error){
-    logger.error("Browser launch failed:", error);
-    throw error;
-  }
-}
-
-async function launchBrowser(){
-  try{
-    browser = await chromium.launch(browserOpts);
-    await initContext();
-  }catch(error){
-    logger.error("Browser launch failed:", error);
-    throw error;
-  } 
-}
-
-async function restartBrowser(){
-  logger.warn("Restarting browser...");
-  try{
-    await context?.close();
-    await browser?.close();
-    await startBrowser();
-    logger.success("Browser restarted successfully");
-  }catch(error){
-    logger.error("Browser restart failed:", error);
-  }
-}
-
-setInterval(restartBrowser, 24 * 60 * 60 * 1000); // Restart browser every day to prevent memory leaks
-
-// ------------------- CONTEXT & PAGE POOL ------------------- //
-async function initContext(){
-  context = await browser.newContext({javaScriptEnabled: false, bypassCSP: true, colorScheme: "light" });
-}
-
-const pagePoolOpts = {
-  min: 0,
-  max: CORES * 2,
-  idleTimeoutMillis: 30000,
-  acquireTimeoutMillis: 20000,
-  evictionRunIntervalMillis: 10000,
-  autostart: true
-};
-
-const pagePool = genericPool.createPool(
-  {
-    create: async () => {
-      const page = await context.newPage();
-      await page.goto("about:blank");
-      await configurePage(page);
-      return { context, page };
-    },
-    destroy: async ({ context, page }) => {
-      try { await page.close(); } catch {}
-      // try { await context.close(); } catch {}
-    }
-  },
-  pagePoolOpts,
-);
-
-async function configurePage(page) {
-  if(page._configured) { return; }
-
-  await page.route("**/*", (route) => {
-    const type = route.request().resourceType();
-    if(["image", "font", "stylesheet", "media", "xhr", "fetch"].includes(type)) {
-      return route.abort();
-    }
-    route.continue();
-  });
-  await page.setDefaultNavigationTimeout(10000);
-  await page.setDefaultTimeout(20000);
-  page._configured = true;
-}
-
-setInterval(async () => {
-  if(pagePool.borrowed < 1){
-    try{ await context.close().catch(() => {}); } catch {}
-    await initContext();
-    logger.warn(`Context refreshed to prevent memory leaks`);
-  }
-}, 60 * 1000); // Check every minute if context needs to be refreshed
 
 function getContextPoolStats(){
   const contexts = browser ? browser.contexts() : [];
@@ -240,9 +217,7 @@ async function render(html, type = "pdf") {
   const resource = await pagePool.acquire();
   const { page } = resource;
   try {
-    // await page.goto('about:blank', { waitUntil: 'commit' });
-    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 20000 });
-    // await page.goto(`data:text/html,${encodeURIComponent(html)}`, { waitUntil: "domcontentloaded", timeout: 20000 })
+    await page.setContent(html, { waitUntil: "commit", timeout: 20000 });
     if(type === "pdf"){
       await page.emulateMedia({ media: "screen" });
       return await page.pdf(pdfOpts);
@@ -252,7 +227,7 @@ async function render(html, type = "pdf") {
     await pagePool.destroy(resource);
     throw error;
   }finally {
-    if(page && !page.isClosed()) {
+    if(page && !page.isClosed()){
       await pagePool.release(resource).catch(() => {});
     }
   }
@@ -352,11 +327,24 @@ async function startMonitor(interval = 1000) {
   }, interval);
 }
 
+async function restartBrowser(){
+  logger.warn("Restarting browser...");
+  try{
+    queue.pause();
+    await queue.onIdle();
+    await context.close();
+    await initBrowser();
+    logger.success("Browser restarted successfully");
+  }catch(error){ throw error; }
+}
+
+setInterval(restartBrowser, 24 * 60 * 60 * 1000); // Restart browser every day to prevent memory leaks
+
 // ------------------- Start Server ------------------- //
 let server;
 async function startServer() {
   logger.info("Starting server...");
-  await startBrowser();
+  await initBrowser();
   await startMonitor(5000);
   
   server = app.listen(PORT, () => {
